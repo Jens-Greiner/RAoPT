@@ -8,6 +8,7 @@ This files contains custom loss function(s).
 # ------------------------------------------------------------------------------
 import numpy as np
 import tensorflow as tf
+import tf_keras as keras
 
 EARTH_RADIUS = 6371008.8  # [meter]
 
@@ -65,7 +66,7 @@ def euclidean_loss(y_true, y_pred):
     :return:
     """
     mask_value = tf.constant([0.0, 0.0], dtype=tf.float32)
-    mask = tf.cast(tf.keras.backend.all(tf.keras.backend.not_equal(y_true, mask_value), axis=-1), dtype=tf.float32)
+    mask = tf.cast(keras.backend.all(keras.backend.not_equal(y_true, mask_value), axis=-1), dtype=tf.float32)
     hd = tf.abs((haversine_distance_tf(y_true, y_pred)))  # Shape = (batch_size, trajectory_length)
     mae = tf.math.reduce_sum(hd * mask, axis=1) / tf.math.reduce_sum(mask, axis=1)
     return mae

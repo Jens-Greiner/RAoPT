@@ -15,6 +15,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import tf_keras as keras
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
@@ -34,8 +35,8 @@ def encode_timestamp(df: pd.DataFrame, label: str) -> (np.ndarray, np.ndarray):
     hour = df[label].dt.hour.to_numpy()
     dow = df[label].dt.dayofweek
     try:
-        hour_encoded = tf.keras.utils.to_categorical(hour, num_classes=24)
-        dow_encoded = tf.keras.utils.to_categorical(dow, num_classes=7)
+        hour_encoded = keras.utils.to_categorical(hour, num_classes=24)
+        dow_encoded = keras.utils.to_categorical(dow, num_classes=7)
     except IndexError as e:
         log.error(
             f"There is an error in the time information of trajectory {df['trajectory_id']}."
@@ -77,7 +78,7 @@ def encode_trajectory(t: pd.DataFrame,
     # Categorical attributes
     for f in categorical_features:
         parts.append(
-            tf.keras.utils.to_categorical(t[f], num_classes=vocab_size[f])
+            keras.utils.to_categorical(t[f], num_classes=vocab_size[f])
         )
     for f in numerical_features:
         parts.append(t[f].to_numpy().reshape((-1, 1)))

@@ -20,13 +20,14 @@ from raopt.ml.tensorflow_preamble import TensorflowConfig
 TensorflowConfig.configure_tensorflow()
 
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Input, Bidirectional, \
+import tf_keras as keras
+from tf_keras.layers import Dense, Input, Bidirectional, \
     Masking, Concatenate, TimeDistributed, LSTM
-from tensorflow.keras.layers import Rescaling
-from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.python.keras.callbacks import EarlyStopping
+from tf_keras.layers import Rescaling
+from tf_keras.models import Model
+from tf_keras.optimizers import Adam
+from tf_keras.preprocessing.sequence import pad_sequences
+from tf_keras.callbacks import EarlyStopping
 from tqdm.keras import TqdmCallback
 
 from raopt.ml.encoder import encode_trajectory, decode_trajectory
@@ -408,7 +409,7 @@ class AttackModel:
                 MODEL_NAME + "_epoch{epoch:03d}.hdf5"
         else:
             checkpoint_path = self.param_file
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        checkpoint = keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,  # where to save
             monitor=stop_metric,  # metric to monitor
             save_best_only=True,  # only save on improved accuracy
@@ -436,7 +437,7 @@ class AttackModel:
 
         # Tensorboard
         if tensorboard:
-            tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            tensorboard_callback = keras.callbacks.TensorBoard(
                 log_dir=Config.get_tensorboard_dir())
             callbacks.append(tensorboard_callback)
 

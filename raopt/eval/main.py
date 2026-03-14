@@ -272,6 +272,7 @@ def run_case(case: dict) -> bool:
     from raopt.utils import helpers
     from raopt.ml.model import AttackModel
     import tensorflow as tf
+    import tf_keras as keras
     cid = case['ID']
     print(f"\033[33m Running Case {cid}.\033[0m")
 
@@ -342,7 +343,7 @@ def run_case(case: dict) -> bool:
     for train_idx, test_idx in splits:
 
         # Against memory leakage
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
 
         fold += 1
         log.info(f"Processing round {fold}/{len(splits)}")
