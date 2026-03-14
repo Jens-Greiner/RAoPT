@@ -91,24 +91,25 @@ def mark_case_complete(case_id: str, mark_as=True, filename=get_cases_file()) ->
     cases.to_csv(filename, index=False)
 
 
-def compute_distances(val: (pd.DataFrame, pd.DataFrame, pd.DataFrame, int)) -> dict:
+def compute_distances(val: tuple) -> dict:
     """
     Compute our metrics for the given tuple.
-    :param val: (Original Traj., Reconstructed Traj., Protected Traj., Fold Number)
+    :param val: (Original Traj., Reconstructed Traj., Protected Traj., Fold Number, Is 1D)
     :return: All metrics as dict
     """
-    (o, r, p, fold) = val
+    (o, r, p, fold, is_1d) = val
+    use_haversine = not is_1d
     res = \
         {
             'Fold': fold,
             'Euclidean Original - Protected':
-                euclidean_distance_pd(o, p, use_haversine=True, disable_checks=True),
+                euclidean_distance_pd(o, p, use_haversine=use_haversine, disable_checks=True),
             'Euclidean Original - Reconstructed':
-                euclidean_distance_pd(o, r, use_haversine=True, disable_checks=True),
+                euclidean_distance_pd(o, r, use_haversine=use_haversine, disable_checks=True),
             'Hausdorff Original - Protected':
-                hausdorff_distance_pd(o, p, use_haversine=True, disable_checks=True),
+                hausdorff_distance_pd(o, p, use_haversine=use_haversine, disable_checks=True),
             'Hausdorff Original - Reconstructed':
-                hausdorff_distance_pd(o, r, use_haversine=True, disable_checks=True),
+                hausdorff_distance_pd(o, r, use_haversine=use_haversine, disable_checks=True),
             'Jaccard Original - Protected':
                 jaccard_index_pd(o, p),
             'Jaccard Original - Reconstructed':
@@ -118,13 +119,14 @@ def compute_distances(val: (pd.DataFrame, pd.DataFrame, pd.DataFrame, int)) -> d
 
 
 def parallelized_distance_computation(
-        test_orig: dict, reconstructed: dict, test_p: dict, fold: int = 0) -> List[dict]:
+        test_orig: dict, reconstructed: dict, test_p: dict, fold: int = 0, is_1d: bool = False) -> List[dict]:
     """
     Compute our metrics in parallel.
     :param test_orig: Original Trajectories [d[id] = pd.DataFrame]
     :param reconstructed: Reconstructed Trajectories [d[id] = pd.DataFrame]
     :param test_p: Protected Trajectories [d[id] = pd.DataFrame]
     :param fold: Fold number
+    :param is_1d: Whether to use 1D metrics (True) or spatial metrics (False)
     :return: List of Results for each tuple of trajectories with same ID.
     """
     start = timer()
@@ -132,7 +134,8 @@ def parallelized_distance_computation(
         (test_orig[id],
          reconstructed[id],
          test_p[id],
-         fold)
+         fold,
+         is_1d)
         for id in reconstructed
     ]
     if Config.parallelization_enabled():
@@ -394,8 +397,9 @@ def run_case(case: dict) -> bool:
         ###########################################################################
         # Compute Results
         ###########################################################################
+        is_1d = 'generic' in case['Dataset Train'].lower() or 'GENERIC' in case['Dataset Train'].upper()
         fold_results = parallelized_distance_computation(test_orig=test_originals, reconstructed=reconstructed,
-                                                         test_p=test_protected, fold=fold)
+                                                         test_p=test_protected, fold=fold, is_1d=is_1d)
         # Store results of this fold
         result_file = odir + f'fold_results_{fold}.csv'
         df = pd.DataFrame(fold_results)

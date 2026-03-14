@@ -11,10 +11,12 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 from typing import Dict, List
 
 from raopt.dp.sdd import execute_mechanism, sdd, StuckException, cnoise
+from raopt.dp.bdp import execute_generic_mechanism, count_active_bdp_markov_chain_bound
 from raopt.eval.parser import parse_eval
 from raopt.utils import logger, helpers
 from raopt.utils.config import Config, get_basename
@@ -23,7 +25,7 @@ from raopt.utils.helpers import store, load, trajectories_to_csv, load_trajector
 
 log = logger.configure_root_loger(
         logging.INFO, Config.get_logdir() + "trajectory_generator.log")
-mechanisms = {'SDD': sdd, 'CNOISE': cnoise}
+mechanisms = {'SDD': sdd, 'CNOISE': cnoise, 'BDP_MARKOV': count_active_bdp_markov_chain_bound}
 
 
 def protect_trajectories(
@@ -32,6 +34,7 @@ def protect_trajectories(
         epsilon: float,
         M: float,
         tmp_file: str,
+        dataset: str = '',
 ) -> List[pd.DataFrame]:
     """
     Protect the given trajectories with the specified protection mechanism.
@@ -43,10 +46,15 @@ def protect_trajectories(
     :return:
     """
     # Compute reference point
-    log.info("Computing Reference Point...")
-    lat0, lon0 = helpers.compute_reference_point(unprotected_trajectories)
-    log.info(f"Using reference point ({lat0:.2f}, {lon0:.2f}).")
-    todo = [(t, mechanism, lat0, lon0, epsilon, M) for t in unprotected_trajectories]
+    if mechanism.upper() in ['BDP_MARKOV']:
+        # For generic non-spatial mechanisms, bypass reference point computation
+        lat0, lon0 = 0.0, 0.0
+        log.info(f"Bypassing reference point computation for mechanism {mechanism}.")
+    else:
+        log.info("Computing Reference Point...")
+        lat0, lon0 = helpers.compute_reference_point(unprotected_trajectories)
+        log.info(f"Using reference point ({lat0:.2f}, {lon0:.2f}).")
+    todo = [(t, mechanism, lat0, lon0, epsilon, M, dataset) for t in unprotected_trajectories]
     protected = []
     try:
         if Config.parallelization_enabled():
@@ -111,7 +119,7 @@ def apply_mechanism(
 
     todo = [originals[t] for t in originals if t not in done]
 
-    protected.extend(protect_trajectories(todo, mechanism=mechanism, epsilon=epsilon, M=M, tmp_file=tmpfile))
+    protected.extend(protect_trajectories(todo, mechanism=mechanism, epsilon=epsilon, M=M, tmp_file=tmpfile, dataset=dataset))
 
     dct = helpers.dictify_trajectories(protected)
     if Config.is_caching():
@@ -123,7 +131,7 @@ def apply_mechanism(
 def _generate(args: tuple):
     """Call the actual protection mechanism."""
     t: pd.DataFrame
-    t, mechanism, lat0, lon0, epsilon, M = args
+    t, mechanism, lat0, lon0, epsilon, M, dataset = args
     i = (t['trajectory_id'][0])
     if mechanism == 'SDD':
         error_counter = 0
@@ -146,6 +154,19 @@ def _generate(args: tuple):
                     )
                     return i, None
                 # log.warning("Restarting SDD mechanism because the algorithm is stuck at line 11.")
+    elif mechanism.upper() in ['BDP_MARKOV']:
+        # TODO: Define transition probabiltiies for BDP markov based on dataset
+        if 'GENERIC' in dataset.upper():
+            # Using placeholder transition probabilities (e.g., from activity dataset)
+            trans_probs = np.array([[0.9, 0.1], [0.3, 0.7]])
+        else:
+            trans_probs = np.array([[0.5, 0.5], [0.5, 0.5]])
+
+        try:
+            tp = execute_generic_mechanism(t, mechanisms[mechanism], kwargs={'epsilon': epsilon, 'trans_probs': trans_probs})
+        except ValueError as e:
+            log.warning(f"BDP Markov Execution failed for sequence {i}: {e}")
+            return i, None
     else:
         tp = execute_mechanism(
             t, mechanisms[mechanism], lat0=lat0, lon0=lon0, kwargs={'epsilon': epsilon, 'M': M}

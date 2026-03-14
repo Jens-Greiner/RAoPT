@@ -22,7 +22,7 @@ TensorflowConfig.configure_tensorflow()
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Input, Bidirectional, \
     Masking, Concatenate, TimeDistributed, LSTM
-from tensorflow.keras.layers.experimental.preprocessing import Rescaling
+from tensorflow.keras.layers import Rescaling
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -96,6 +96,7 @@ class AttackModel:
             embedding_size: Dict[str, int] = None,
             learning_rate: float = LEARNING_RATE,
             parameter_file: str = None,
+            one_d_mode: bool = False,
     ):
         """
         Initialize the model
@@ -107,6 +108,7 @@ class AttackModel:
         :param learning_rate: The Adam learning rate to use
         :param parameter_file: File to save parameters of the model
         :param reference_point: (lat, lon)
+        :param one_d_mode: Whether the model is reconstructing a 1D time series (bypass 2D spatial rules)
         """
         self.history = None
         self.max_length = max_length
@@ -132,6 +134,12 @@ class AttackModel:
         self.scale_factor = scale_factor
         self.lat0, self.lon0 = reference_point
         self.param_file = parameter_file
+        self.one_d_mode = one_d_mode
+        setattr(self, '1d_mode', one_d_mode)
+
+        if self.one_d_mode and loss == euclidean_loss:
+            loss = 'mae'
+            log.info("1D Mode enabled. Switched default spatial Euclidean loss to MAE.")
 
         # Define the optimizer
         self.optimizer = Adam(learning_rate)  # Good default choice
@@ -226,13 +234,18 @@ class AttackModel:
         if SCALE_IN_MODEL:
             # We need to scale up because tanh outputs are between -1 an 1
             offset = (self.lat0, self.lon0) if ADD_REF_POINT_IN_MODEL else (0., 0.)
-            lat_scaled = TimeDistributed(Rescaling(scale=self.scale_factor[0], offset=offset[0]),
-                                         name='Output_lat_scaled')(output_lat)
-            lon_scaled = TimeDistributed(Rescaling(scale=self.scale_factor[1], offset=offset[1]),
-                                         name='Output_lon_scaled')(output_lon)
-            outputs = [lat_scaled, lon_scaled]
+            if hasattr(self, '1d_mode') and getattr(self, '1d_mode', False):
+                 feat_scaled = TimeDistributed(Rescaling(scale=self.scale_factor[0], offset=offset[0]), name='Output_feat_scaled')(output_lat)
+                 outputs = [feat_scaled]
+            else:
+                 lat_scaled = TimeDistributed(Rescaling(scale=self.scale_factor[0], offset=offset[0]), name='Output_lat_scaled')(output_lat)
+                 lon_scaled = TimeDistributed(Rescaling(scale=self.scale_factor[1], offset=offset[1]), name='Output_lon_scaled')(output_lon)
+                 outputs = [lat_scaled, lon_scaled]
         else:
-            outputs = [output_lat, output_lon]
+             if hasattr(self, '1d_mode') and getattr(self, '1d_mode', False):
+                 outputs = [output_lat]
+             else:
+                 outputs = [output_lat, output_lon]
 
         # We actually just need to compute latitude and longitude
         # This code assumes that all other features are categorical
@@ -302,11 +315,17 @@ class AttackModel:
         if not SCALE_IN_MODEL:
             # Scale longitude and latitude
             # ***Moved into Model via Rescaling Layer***
-            y[:, :, 0] /= self.scale_factor[0]
-            y[:, :, 1] /= self.scale_factor[1]
+            if hasattr(self, '1d_mode') and getattr(self, '1d_mode', False):
+                 y[:, :, 0] /= self.scale_factor[0]
+            else:
+                 y[:, :, 0] /= self.scale_factor[0]
+                 y[:, :, 1] /= self.scale_factor[1]
 
         # Only use lat/lon information
-        y = y[:, :, :2]
+        if hasattr(self, '1d_mode') and getattr(self, '1d_mode', False):
+             y = y[:, :, :1]
+        else:
+             y = y[:, :, :2]
 
         return y
 
@@ -331,7 +350,10 @@ class AttackModel:
         result = []
         for i in range(len(y)):
             n = len(y[i]) - len(x[i])
-            result.append(y[i][n:])
+            if hasattr(self, '1d_mode') and getattr(self, '1d_mode', False):
+                result.append(y[i][n:])
+            else:
+                result.append(y[i][n:])
         return result
 
     def train(self, x: np.ndarray,

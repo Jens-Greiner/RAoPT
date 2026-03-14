@@ -79,6 +79,8 @@ if __name__ == '__main__':
     ###########################################################################
     # Model
     ###########################################################################
+    is_1d = 'generic' in args.infile.lower()
+    
     lstm = AttackModel(
             max_length=max_length,
             features=features,
@@ -86,7 +88,8 @@ if __name__ == '__main__':
             embedding_size=embedding_size,
             scale_factor=scale_factor,
             reference_point=(lat0, lon0),
-            parameter_file=args.parameter_file
+            parameter_file=args.parameter_file,
+            one_d_mode=is_1d
     )
     log.info('Model Summary:')
     print(lstm.model.summary())
@@ -113,7 +116,7 @@ if __name__ == '__main__':
         reconstructed: Dict[str, pd.DataFrame] = {str(p['trajectory_id'][0]): p for p in reconstructed}
         originals = helpers.read_trajectories_from_csv(args.evaluate)
         distances = eval_main.parallelized_distance_computation(
-            test_orig=originals, reconstructed=reconstructed, test_p=protected, fold=0)
+            test_orig=originals, reconstructed=reconstructed, test_p=protected, fold=0, is_1d=is_1d)
         # Store results
         df = pd.DataFrame(distances)
         df.to_csv(args.outfile, index=False)

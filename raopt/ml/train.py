@@ -89,6 +89,10 @@ if __name__ == '__main__':
     ###########################################################################
     # Model
     ###########################################################################
+    is_1d = 'generic' in args.ofile.lower()
+    if is_1d:
+        log.info("1D generic data detected. Enabling 1D Mode.")
+    
     lstm = AttackModel(
             max_length=max_length,
             features=features,
@@ -97,7 +101,8 @@ if __name__ == '__main__':
             scale_factor=scale_factor,
             learning_rate=args.learning_rate,
             reference_point=(lat0, lon0),
-            parameter_file=args.parameter_file
+            parameter_file=args.parameter_file,
+            one_d_mode=is_1d
     )
     log.info('Model Summary:')
     print(lstm.model.summary())

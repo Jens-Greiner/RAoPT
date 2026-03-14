@@ -60,12 +60,18 @@ def encode_trajectory(t: pd.DataFrame,
     :param numerical_features: List of features that are supposed to be encoded as floats.
     :return: out.shape = (len(t), # Features)
     """
-    # Drop all NaN values before encoding
     t.dropna(inplace=True)
     t.reset_index(inplace=True, drop=True)
-    lat = t['latitude'].to_numpy().reshape((-1, 1))
-    lon = t['longitude'].to_numpy().reshape((-1, 1))
-    parts = [lat, lon]
+    
+    parts = []
+    
+    if 'latitude' in t.columns and 'longitude' in t.columns:
+        lat = t['latitude'].to_numpy().reshape((-1, 1))
+        lon = t['longitude'].to_numpy().reshape((-1, 1))
+        parts.extend([lat, lon])
+    elif 'feature_val' in t.columns:
+        feat = t['feature_val'].to_numpy().reshape((-1, 1))
+        parts.append(feat)
     if not ignore_time and 'timestamp' in t:
         parts.extend(encode_timestamp(t, 'timestamp'))
     # Categorical attributes
@@ -90,8 +96,12 @@ def decode_trajectory(t: np.ndarray, ignore_time: bool = False) -> pd.DataFrame:
     if ignore_time:
         if len(t) > 2:
             lat, lon, _ = np.split(t, [1, 2], axis=-1)
-        else:
+        elif len(t) == 2:
             lat, lon = np.split(t, [1], axis=-1)
+        else:
+            feat = np.split(t, [1], axis=-1)[0]
+            lat = feat
+            lon = np.zeros_like(feat)
     else:
         lat, lon, hour_encoded, dow_encoded = np.split(t, [1, 2, 26], axis=-1)
         hour = np.argmax(hour_encoded, axis=-1)
@@ -115,8 +125,9 @@ def subtract_reference_point(t: np.ndarray, lat0: float, lon0: float) -> pd.Data
     :param lon0: Longitude of reference point
     :return:
     """
-    t['latitude'] -= lat0
-    t['longitude'] -= lon0
+    if 'latitude' in t.columns and 'longitude' in t.columns:
+        t['latitude'] -= lat0
+        t['longitude'] -= lon0
     return t
 
 
@@ -128,8 +139,9 @@ def add_reference_point(t: np.ndarray, lat0: float, lon0: float) -> pd.DataFrame
     :param lon0: Longitude of reference point
     :return:
     """
-    t['latitude'] += lat0
-    t['longitude'] += lon0
+    if 'latitude' in t.columns and 'longitude' in t.columns:
+        t['latitude'] += lat0
+        t['longitude'] += lon0
     return t
 
 
