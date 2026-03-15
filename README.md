@@ -1,3 +1,5 @@
+This is originally forked from https://github.com/erik-buchholz/RAoPT
+but now strongly modified to also include BDP perturbation and work on non trajectory data
 # Reconstruction Attack on Protected Trajectories (RAoPT)
 
 Artifacts for [ACSAC'22](https://www.acsac.org/2022/) paper 'Reconstruction Attack on Differential Private Trajectory Protection Mechanisms'.
